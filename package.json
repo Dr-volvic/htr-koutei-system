@@ -1,0 +1,17 @@
+{
+  "name": "700b-polishing-tracker",
+  "version": "1.0.0",
+  "description": "700B ポリッシング作業記録アプリ（MIGAKI専用ストップウォッチ＆Googleスプレッドシート連携）",
+  "main": "src/server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "googleapis": "^144.0.0"
+  }
+}

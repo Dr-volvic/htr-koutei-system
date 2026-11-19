@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <title>700B ポリッシング作業記録 (MIGAKI)</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-header">
+      <div class="header-title">
+        <span class="badge-process">MIGAKI</span>
+        <h1>700B ポリッシング作業記録</h1>
+      </div>
+      <div class="header-meta">
+        <span id="syncStatusPill" class="sync-pill hidden">同期中...</span>
+        <span id="todayDateLabel" class="date-label">読み込み中...</span>
+        <button id="refreshBtn" type="button" class="btn btn-ghost btn-sm">更新</button>
+      </div>
+    </header>
+
+    <!-- 通信エラー・再送信バナー / 設定警告バナー -->
+    <div id="configBanner" class="banner banner-warning hidden">
+      <span id="configBannerText"></span>
+    </div>
+
+    <div id="retryBanner" class="banner banner-error hidden" role="alert">
+      <div class="banner-body">
+        <strong>送信エラー</strong>
+        <p id="retryErrorText"></p>
+      </div>
+      <div class="banner-actions">
+        <button id="retrySendBtn" type="button" class="btn btn-danger">再送信</button>
+        <button id="discardPendingBtn" type="button" class="btn btn-ghost">破棄</button>
+      </div>
+    </div>
+
+    <main class="main-layout">
+      <!-- A. 選択＆計測エリア（メイン） -->
+      <section class="card timer-section" aria-label="選択と計測エリア">
+        <div class="selection-grid">
+          <div class="selector-group">
+            <div class="selector-label">COLOR <span class="required-tag">必須</span></div>
+            <div id="colorButtons" class="choice-row choice-row-3">
+              <button type="button" class="choice-btn" data-color="1F7">1F7</button>
+              <button type="button" class="choice-btn" data-color="1G3">1G3</button>
+              <button type="button" class="choice-btn" data-color="4V8">4V8</button>
+            </div>
+          </div>
+
+          <div class="selector-group">
+            <div class="selector-label">製品 <span class="required-tag">必須</span></div>
+            <div id="productButtons" class="choice-row choice-row-4">
+              <button type="button" class="choice-btn" data-product="RH">RH</button>
+              <button type="button" class="choice-btn" data-product="LH">LH</button>
+              <button type="button" class="choice-btn" data-product="No1">No1</button>
+              <button type="button" class="choice-btn" data-product="CTB">CTB</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="timerBox" class="timer-display-box state-idle">
+          <div class="timer-status-row">
+            <span id="timerStatusBadge" class="status-badge">待機中</span>
+            <span id="timerSelectionSummary" class="selection-summary">COLOR・製品を選択してください</span>
+          </div>
+          <div id="timerValue" class="timer-value">00:00</div>
+        </div>
+
+        <!-- 計測前ボタン -->
+        <div id="idleControls" class="controls-row">
+          <button id="startBtn" type="button" class="btn btn-primary btn-xl" disabled>
+            開始
+          </button>
+        </div>
+
+        <!-- 計測中ボタン -->
+        <div id="activeControls" class="controls-row controls-3 hidden">
+          <button id="pauseResumeBtn" type="button" class="btn btn-warning btn-xl">
+            一時停止
+          </button>
+          <button id="completeNormalBtn" type="button" class="btn btn-success btn-xl">
+            完了（磨き）
+          </button>
+          <button id="completeThroughBtn" type="button" class="btn btn-info btn-xl">
+            スルー良品
+          </button>
+        </div>
+      </section>
+
+      <!-- B. 今日の成績エリア（ダッシュボード） -->
+      <section class="card dashboard-section" aria-label="今日の成績エリア">
+        <div class="section-header">
+          <h2>今日の成績</h2>
+          <span class="sub-note">※スルー良品も平均時間に含みます</span>
+        </div>
+
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <div class="kpi-label">今日の合計作業時間</div>
+            <div id="kpiTotalTime" class="kpi-value">0時間0分0秒</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">今日の合計完了個数</div>
+            <div class="kpi-value">
+              <span id="kpiTotalCount">0</span><span class="kpi-unit">個</span>
+            </div>
+            <div id="kpiThroughSub" class="kpi-sub">うちスルー 0個</div>
+          </div>
+        </div>
+
+        <div class="matrix-wrapper">
+          <div class="matrix-title">色 × 製品ごとの平均時間</div>
+          <table class="matrix-table">
+            <thead>
+              <tr>
+                <th>COLOR＼製品</th>
+                <th>RH</th>
+                <th>LH</th>
+                <th>No1</th>
+                <th>CTB</th>
+              </tr>
+            </thead>
+            <tbody id="matrixBody">
+              <!-- JSで生成 -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- C. 今日の履歴・申告修正エリア -->
+      <section class="card history-section" aria-label="今日の履歴と申告修正">
+        <div class="section-header">
+          <h2>今日の履歴・申告修正</h2>
+          <button id="manualAddBtn" type="button" class="btn btn-primary btn-md">
+            ＋ 手動で1件追加
+          </button>
+        </div>
+
+        <div id="historyEmpty" class="empty-state hidden">
+          今日の記録はまだありません。
+        </div>
+
+        <div class="history-list" id="historyList">
+          <!-- JSで生成 -->
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- 編集 / 手動追加 モーダル -->
+  <div id="recordModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="recordModalTitle">記録の編集</h3>
+        <button id="closeRecordModalBtn" type="button" class="btn btn-ghost btn-sm">✕</button>
+      </div>
+      <form id="recordForm" class="modal-form">
+        <input type="hidden" id="modalMode" value="edit" />
+        <input type="hidden" id="modalRecordId" value="" />
+
+        <div class="form-field">
+          <label>COLOR</label>
+          <div class="modal-choices" id="modalColorGroup">
+            <button type="button" class="choice-btn sm" data-modal-color="1F7">1F7</button>
+            <button type="button" class="choice-btn sm" data-modal-color="1G3">1G3</button>
+            <button type="button" class="choice-btn sm" data-modal-color="4V8">4V8</button>
+          </div>
+        </div>
+
+        <div class="form-field">
+          <label>製品</label>
+          <div class="modal-choices" id="modalProductGroup">
+            <button type="button" class="choice-btn sm" data-modal-product="RH">RH</button>
+            <button type="button" class="choice-btn sm" data-modal-product="LH">LH</button>
+            <button type="button" class="choice-btn sm" data-modal-product="No1">No1</button>
+            <button type="button" class="choice-btn sm" data-modal-product="CTB">CTB</button>
+          </div>
+        </div>
+
+        <div class="form-field">
+          <label for="modalDurationSec">作業時間（秒）</label>
+          <input id="modalDurationSec" type="number" min="0" step="1" required inputmode="numeric" />
+        </div>
+
+        <div class="form-field">
+          <label>スルー判定</label>
+          <div class="modal-choices" id="modalJudgeGroup">
+            <button type="button" class="choice-btn sm" data-modal-through="false">通常</button>
+            <button type="button" class="choice-btn sm" data-modal-through="true">スルー</button>
+          </div>
+        </div>
+
+        <div class="form-field">
+          <label for="modalMemo">理由・メモ（スプレッドシートI列に記録）</label>
+          <input id="modalMemo" type="text" placeholder="例: 止め忘れ修正 / 押し忘れ追加" />
+        </div>
+
+        <div class="modal-actions">
+          <button id="cancelRecordModalBtn" type="button" class="btn btn-ghost btn-lg">キャンセル</button>
+          <button id="saveRecordModalBtn" type="submit" class="btn btn-primary btn-lg">保存する</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 削除確認モーダル -->
+  <div id="deleteModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>記録の削除</h3>
+        <button id="closeDeleteModalBtn" type="button" class="btn btn-ghost btn-sm">✕</button>
+      </div>
+      <form id="deleteForm" class="modal-form">
+        <input type="hidden" id="deleteRecordId" value="" />
+        <p id="deleteTargetSummary" class="delete-summary"></p>
+        <div class="form-field">
+          <label for="deleteMemo">削除理由・メモ（スプレッドシートI列に記録）</label>
+          <input id="deleteMemo" type="text" placeholder="例: 誤計測のため削除" />
+        </div>
+        <div class="modal-actions">
+          <button id="cancelDeleteModalBtn" type="button" class="btn btn-ghost btn-lg">キャンセル</button>
+          <button id="confirmDeleteBtn" type="submit" class="btn btn-danger btn-lg">削除を実行</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
